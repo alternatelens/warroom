@@ -1,31 +1,39 @@
-import { createServer } from 'http';
-import next from 'next';
-import { Server } from 'socket.io';
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
 
-const dev = process.env.NODE_ENV !== 'production';
-const app = next({ dev });
-const handle = app.getRequestHandler();
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*', // allow all for dev; restrict in prod
+    methods: ['GET', 'POST']
+  }
+});
 
-app.prepare().then(() => {
-  const httpServer = createServer((req, res) => {
-    handle(req, res);
+let viewerCount = 0;
+
+io.on('connection', (socket) => {
+  viewerCount++;
+  io.emit('viewer_count', viewerCount);
+
+  socket.on('join_page', () => {
+    // can add logic per page if needed
   });
 
-  const io = new Server(httpServer, { path: '/socket.io' });
-
-  let viewerCount = 0;
-  io.on('connection', (socket) => {
-    viewerCount++;
+  socket.on('leave_page', () => {
+    viewerCount = Math.max(viewerCount - 1, 0);
     io.emit('viewer_count', viewerCount);
-
-    socket.on('disconnect', () => {
-      viewerCount = Math.max(viewerCount - 1, 0);
-      io.emit('viewer_count', viewerCount);
-    });
   });
 
-  const PORT = process.env.PORT || 3000;
-  httpServer.listen(PORT, () => {
-    console.log(`Server with Socket.IO ready on port ${PORT}`);
+  socket.on('disconnect', () => {
+    viewerCount = Math.max(viewerCount - 1, 0);
+    io.emit('viewer_count', viewerCount);
   });
+});
+
+const PORT = process.env.PORT || 10000;
+server.listen(PORT, () => {
+  console.log(`Socket server running on port ${PORT}`);
 });
